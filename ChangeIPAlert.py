@@ -1,6 +1,7 @@
 import io,json,os
 import public_ip as ip
-from pushbullet import Pushbullet
+import urllib.parse
+import urllib.request
 
 class ChangeIPAlert():
 
@@ -12,7 +13,6 @@ class ChangeIPAlert():
             if not new_ip == self._old_ip:
                 print("The IP change from {} to {}".format(self._old_ip,new_ip))
                 self.send_alert(new_ip)
-                self.update_parameters(new_ip)
 
 
     def load_parameters(self):
@@ -23,7 +23,8 @@ class ChangeIPAlert():
                 self.parameters = json.load(f)
 
                 self._old_ip = self.parameters["IP"]
-                self._api_key = self.parameters["APIKEY"]
+                self._api_key = self.parameters["SendKey"]
+                self._old_resp = self.parameters["Response"]
             
             f.close()
         else:
@@ -31,16 +32,27 @@ class ChangeIPAlert():
             exit()
 
 
-    def update_parameters(self,ip):
+    def update_parameters(self,ip,result):
         self.parameters["IP"] = ip
+        self.parameters["Response"] = result
         with open(self.config_file, "w") as jsonFile:
             json.dump(self.parameters, jsonFile)
         jsonFile.close()
 
+    def sc_send(self,text, desp='', key='[SENDKEY]'):
+        postdata = urllib.parse.urlencode({'text': text, 'desp': desp}).encode('utf-8')
+        url = f'https://sctapi.ftqq.com/{key}.send'
+        req = urllib.request.Request(url, data=postdata, method='POST')
+        with urllib.request.urlopen(req) as response:
+            result = response.read().decode('utf-8')
+        return result
+
 
     def send_alert(self,ip):
-        pb = Pushbullet(self._api_key)
-        push = pb.push_note('Se actualizo la IP: {}'.format(ip), "Cambio de IP")
+        desp = 'New IPv4 address: {}'.format(ip)
+        result = self.sc_send('IP Changes', desp, self._api_key)
+        self.update_parameters(ip,result)
+        
 
 if __name__ == "__main__":
     alertas = ChangeIPAlert()
